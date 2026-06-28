@@ -159,3 +159,7 @@ sbrklazy(int n) {
   return sys_sbrk(n, SBRK_LAZY);
 }
 
+int thread_create(void (*fcn)(void *), void *arg, void *stack) {
+    // Passa direto. As assinaturas batem perfeitamente agora!
+    return clone(fcn, arg, stack);
+}

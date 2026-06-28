@@ -22,6 +22,7 @@ sub entry {
 }
 	
 entry("fork");
+entry("cowfork");
 entry("exit");
 entry("wait");
 entry("pipe");
@@ -42,3 +43,12 @@ entry("getpid");
 entry("sbrk");
 entry("pause");
 entry("uptime");
+entry("set_priority");
+entry("getprio");
+entry("sem_init");
+entry("sem_wait");
+entry("sem_post");
+entry("sem_destroy");
+entry("vmprint");
+entry("clone");
+entry("join");

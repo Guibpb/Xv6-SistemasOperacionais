@@ -145,6 +145,26 @@ UPROGS=\
 	$U/_logstress\
 	$U/_forphan\
 	$U/_dorphan\
+	$U/_meu_teste\
+	$U/_pingpong\
+	$U/_primes\
+	$U/_find\
+	$U/_xargs\
+	$U/_test_sched\
+	$U/_ps\
+	$U/_stress\
+	$U/_setprio\
+	$U/_aulaSO\
+	$U/_fibonacci\
+	$U/_mempages\
+	$U/_semtest\
+	$U/_cowtest\
+	$U/_testcowfork\
+	$U/_clonetest\
+	$U/_lista3ex1\
+	$U/_lista3ex2\
+	$U/_lista3ex3\
+	$U/_lista3ex4\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

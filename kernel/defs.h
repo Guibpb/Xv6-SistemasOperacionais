@@ -59,6 +59,8 @@ void            ireclaim(int);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
+void 			kaddref(uint64 pa);
+int  			kgetref(uint64 pa);
 
 // log.c
 void            initlog(int, struct superblock*);
@@ -101,6 +103,13 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
+int             set_priority(int, int);
+int             proc_vmprint(int);
+int 			kcowfork(void);
+int 			uvmcowcopy(pagetable_t, pagetable_t, uint64);
+int 			uvmshare(pagetable_t, pagetable_t, uint64);
+int 			clone(uint64, uint64, uint64);
+int 			join(int);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
@@ -129,7 +138,7 @@ int             strncmp(const char*, const char*, uint);
 char*           strncpy(char*, const char*, int);
 
 // syscall.c
-void            argint(int, int*);
+int            argint(int, int*);
 int             argstr(int, char*, int);
 void            argaddr(int, uint64 *);
 int             fetchstr(uint64, char*, int);
@@ -169,6 +178,9 @@ int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
 int             ismapped(pagetable_t, uint64);
 uint64          vmfault(pagetable_t, uint64, int);
+void            vmprint(pagetable_t);
+int 			cowalloc(pagetable_t pagetable, uint64 va);
+void            freewalk(pagetable_t);
 
 // plic.c
 void            plicinit(void);

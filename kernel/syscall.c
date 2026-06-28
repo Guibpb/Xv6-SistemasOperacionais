@@ -53,10 +53,11 @@ argraw(int n)
 }
 
 // Fetch the nth 32-bit system call argument.
-void
+int
 argint(int n, int *ip)
 {
   *ip = argraw(n);
+  return 0;
 }
 
 // Retrieve an argument as a pointer.
@@ -81,6 +82,7 @@ argstr(int n, char *buf, int max)
 
 // Prototypes for the functions that handle system calls.
 extern uint64 sys_fork(void);
+extern uint64 sys_cowfork(void);
 extern uint64 sys_exit(void);
 extern uint64 sys_wait(void);
 extern uint64 sys_pipe(void);
@@ -101,11 +103,21 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_link(void);
 extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
+extern uint64 sys_set_priority(void);
+extern uint64 sys_getprio(void);
+extern uint64 sys_sem_init(void);
+extern uint64 sys_sem_wait(void);
+extern uint64 sys_sem_post(void);
+extern uint64 sys_sem_destroy(void);
+extern uint64 sys_vmprint(void);
+extern uint64 sys_clone(void);
+extern uint64 sys_join(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
+[SYS_cowfork] sys_cowfork,
 [SYS_exit]    sys_exit,
 [SYS_wait]    sys_wait,
 [SYS_pipe]    sys_pipe,
@@ -126,6 +138,15 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_set_priority]  sys_set_priority,
+[SYS_getprio]     sys_getprio,
+[SYS_sem_init]    sys_sem_init,
+[SYS_sem_wait]    sys_sem_wait,
+[SYS_sem_post]    sys_sem_post,
+[SYS_sem_destroy] sys_sem_destroy,
+[SYS_vmprint]     sys_vmprint,
+[SYS_clone] sys_clone,
+[SYS_join]  sys_join,
 };
 
 void

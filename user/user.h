@@ -1,9 +1,18 @@
 #define SBRK_ERROR ((char *)-1)
 
+struct uproc {
+  int pid;
+  int priority;
+  int state;       // NOVO: Guarda o estado numérico do processo
+  int is_active;   // NOVO: 1 se fila ativa, 0 se inativa/expirada
+  char name[16];
+};
+
 struct stat;
 
 // system calls
 int fork(void);
+int cowfork(void);
 int exit(int) __attribute__((noreturn));
 int wait(int*);
 int pipe(int*);
@@ -24,6 +33,15 @@ int getpid(void);
 char* sys_sbrk(int,int);
 int pause(int);
 int uptime(void);
+int set_priority(int pid, int priority);
+int getprio(struct uproc*);
+int sem_init(int);
+int sem_wait(int);
+int sem_post(int);
+int sem_destroy(int);
+int vmprint(int);
+int clone(void (*fcn)(void*), void *arg, void *stack);
+int join(int pid);
 
 // ulib.c
 int stat(const char*, struct stat*);

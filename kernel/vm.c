@@ -347,30 +347,51 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+
     if(va0 >= MAXVA)
       return -1;
-  
-    pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0) {
-      if((pa0 = vmfault(pagetable, va0, 0)) == 0) {
-        return -1;
-      }
-    }
 
     pte = walk(pagetable, va0, 0);
-    // forbid copyout over read-only user text pages.
+    if(pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0)
+      return -1;
+
+    /*
+      Se for uma página Copy-on-Write, resolve antes de copiar.
+    */
+    if((*pte & PTE_COW) != 0){
+      if(cowalloc(pagetable, va0) < 0)
+        return -1;
+
+      /*
+        Depois do cowalloc, a PTE pode ter mudado.
+        Então buscamos ela de novo.
+      */
+      pte = walk(pagetable, va0, 0);
+      if(pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0)
+        return -1;
+    }
+
+    /*
+      Se depois disso a página ainda não for gravável,
+      o kernel não pode escrever nela.
+      Isso evita sobrescrever página de código.
+    */
     if((*pte & PTE_W) == 0)
       return -1;
-      
+
+    pa0 = PTE2PA(*pte);
+
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
+
     memmove((void *)(pa0 + (dstva - va0)), src, n);
 
     len -= n;
     src += n;
     dstva = va0 + PGSIZE;
   }
+
   return 0;
 }
 
@@ -482,5 +503,186 @@ ismapped(pagetable_t pagetable, uint64 va)
   if (*pte & PTE_V){
     return 1;
   }
+  return 0;
+}
+
+static void
+pte_flags_to_str(pte_t pte, char *out)
+{
+  out[0] = (pte & PTE_R) ? 'R' : '-';
+  out[1] = (pte & PTE_W) ? 'W' : '-';
+  out[2] = (pte & PTE_X) ? 'X' : '-';
+  out[3] = (pte & PTE_U) ? 'U' : '-';
+  out[4] = (pte & PTE_V) ? 'V' : '-';
+  out[5] = '\0';
+}
+
+static char *
+pte_mapping_size(int level)
+{
+  if(level == 0)
+    return "1GiB";
+  if(level == 1)
+    return "2MiB";
+  return "4KiB";
+}
+
+static void
+vmprint_walk(pagetable_t pagetable, int level, uint64 va_prefix)
+{
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+
+    if((pte & PTE_V) == 0)
+      continue;
+
+    uint64 shift = 12 + 9 * (2 - level);
+    uint64 va = va_prefix | ((uint64)i << shift);
+    uint64 pa = PTE2PA(pte);
+    uint64 vpage = va / PGSIZE;
+    uint64 ppage = pa / PGSIZE;
+    int is_leaf = (pte & (PTE_R | PTE_W | PTE_X)) != 0;
+
+    char flags[6];
+    pte_flags_to_str(pte, flags);
+
+    for(int j = 0; j < level; j++)
+      printf("  ");
+
+    if(is_leaf){
+      printf("[%d] L%d FOLHA  pagina_virtual=%d   pagina_fisica=%d tamanho=%s flags=%s\n",
+             i, level, (int)vpage, (int)ppage, pte_mapping_size(level), flags);
+    } else {
+      printf("[%d] L%d TABELA proxima_tabela=%d flags=%s\n",
+             i, level, (int)ppage, flags);
+
+      vmprint_walk((pagetable_t)pa, level + 1, va);
+    }
+  }
+}
+
+void
+vmprint(pagetable_t pagetable)
+{
+  printf("page table root=%p\n", pagetable);
+  printf("formato: [idx] nivel tipo paginas flags\n");
+  vmprint_walk(pagetable, 0, 0);
+}
+
+int
+cowalloc(pagetable_t pagetable, uint64 va)
+{
+  pte_t *pte;
+  uint64 pa;
+  uint flags;
+  char *mem;
+
+  va = PGROUNDDOWN(va);
+
+  if(va >= MAXVA)
+    return -1;
+
+  pte = walk(pagetable, va, 0);
+  if(pte == 0)
+    return -1;
+  if((*pte & PTE_V) == 0)
+    return -1;
+  if((*pte & PTE_U) == 0)
+    return -1;
+  if((*pte & PTE_COW) == 0)
+    return -1;
+
+  pa = PTE2PA(*pte);
+  flags = PTE_FLAGS(*pte);
+
+  if(kgetref(pa) == 1){
+    *pte = PA2PTE(pa) | ((flags | PTE_W) & ~PTE_COW);
+    sfence_vma();
+    return 0;
+  }
+
+  mem = kalloc();
+  if(mem == 0)
+    return -1;
+
+  memmove(mem, (char*)pa, PGSIZE);
+
+  *pte = PA2PTE((uint64)mem) | ((flags | PTE_W) & ~PTE_COW);
+  sfence_vma();
+
+  kfree((void*)pa);
+  return 0;
+}
+
+int
+uvmcowcopy(pagetable_t old, pagetable_t new, uint64 sz)
+{
+  pte_t *pte;
+  uint64 pa, i;
+  uint flags;
+
+  for(i = 0; i < sz; i += PGSIZE){
+    if((pte = walk(old, i, 0)) == 0)
+      panic("uvmcowcopy: pte should exist");
+    if((*pte & PTE_V) == 0)
+      panic("uvmcowcopy: page not present");
+
+    pa = PTE2PA(*pte);
+    flags = PTE_FLAGS(*pte);
+
+    /*
+      Se a página era escrita, ela passa a ser COW.
+      Removemos permissão de escrita e marcamos PTE_COW.
+    */
+    if(flags & PTE_W){
+      flags = (flags & ~PTE_W) | PTE_COW;
+      *pte = PA2PTE(pa) | flags;
+    }
+
+    /*
+      Como pai e filho vão compartilhar a mesma página física,
+      incrementamos o contador de referências.
+    */
+    kaddref(pa);
+
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+      /*
+        Desfaz o incremento caso o mapeamento falhe.
+      */
+      kfree((void*)pa);
+      goto err;
+    }
+  }
+
+  return 0;
+
+err:
+  uvmunmap(new, 0, i / PGSIZE, 1);
+  return -1;
+}
+
+int
+uvmshare(pagetable_t old, pagetable_t new, uint64 sz)
+{
+  pte_t *pte;
+  uint64 pa, i;
+  uint flags;
+
+  for(i = 0; i < sz; i += PGSIZE){
+    pte = walk(old, i, 0);
+    if(pte == 0)
+      panic("uvmshare: pte should exist");
+    if((*pte & PTE_V) == 0)
+      panic("uvmshare: page not present");
+
+    pa = PTE2PA(*pte);
+    flags = PTE_FLAGS(*pte);
+
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+      uvmunmap(new, 0, i / PGSIZE, 0);
+      return -1;
+    }
+  }
+
   return 0;
 }

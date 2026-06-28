@@ -91,6 +91,13 @@ struct proc {
   int killed;                  // If non-zero, have been killed
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
+  int priority;                // Nível de prioridade
+  int queue_list;              // 0 para lista ativa 1 para expirada
+  int is_kernel;               // 1 para processos do kernel e 0 para usuários
+  int thread_count;
+  int is_thread;           // 1 se foi criado por clone(), 0 se por fork()
+  struct proc *tg_leader;     // processo principal do grupo de threads
+  struct spinlock memlock;
 
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
@@ -104,4 +111,12 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+};
+
+struct uproc {
+  int pid;
+  int priority;
+  int state;       // NOVO: Guarda o estado numérico do processo
+  int queue_list;   // NOVO: 1 se fila ativa, 0 se inativa/expirada
+  char name[16];
 };
