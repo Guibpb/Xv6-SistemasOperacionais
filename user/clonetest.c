@@ -9,10 +9,13 @@ int global = 1;
 void
 worker(void *arg)
 {
-  printf("filho antes: %d\n", global);
   int x = *(int*)arg;
 
+  printf("Thread: global antes = %d\n", global);
+
   global += x;
+
+  printf("Thread: global depois = %d\n", global);
 
   exit(0);
 }
@@ -29,7 +32,7 @@ main(int argc, char *argv[])
   raw_stack = malloc(PGSIZE * 2);
 
   if(raw_stack == 0){
-    printf("malloc falhou\n");
+    printf("Erro: falha na alocacao da stack.\n");
     exit(1);
   }
 
@@ -44,30 +47,26 @@ main(int argc, char *argv[])
 
   stack = (char*) addr;
 
-  //printf("raw_stack = %p\n", raw_stack);
-  //printf("stack alinhada = %p\n", stack);
-
-  printf("pai antes: global = %d\n", global);
+  printf("Processo pai: global inicial = %d\n", global);
 
   pid = clone(worker, &arg, stack);
 
   if(pid < 0){
-    printf("clone falhou\n");
+    printf("Erro: clone falhou.\n");
     exit(1);
   }
 
   if(join(pid) < 0){
-    printf("join falhou\n");
+    printf("Erro: join falhou.\n");
     exit(1);
   }
 
-  printf("clone criou thread com pid %d\n", pid);
-  printf("pai depois: global = %d\n", global);
+  printf("Processo pai: global apos o join = %d\n", global);
 
   if(global == 43)
-    printf("clone/join funcionou\n");
+    printf("Teste concluido: a memoria foi compartilhada entre pai e thread.\n");
   else
-    printf("erro: memoria nao foi compartilhada\n");
+    printf("Teste falhou: a alteracao da thread nao foi refletida no pai.\n");
 
   exit(0);
 }
